@@ -1,0 +1,20 @@
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Backend (Java / Maven / Gradle)
+backend/target/
+backend/build/
+.gradle/
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+
+# Local tooling / secrets
+.claude/
+.env
+.env.*
+*.log
+.DS_Store
