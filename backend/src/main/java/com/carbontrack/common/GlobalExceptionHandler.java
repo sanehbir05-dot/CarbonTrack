@@ -1,6 +1,8 @@
 package com.carbontrack.common;
 
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import jakarta.servlet.http.HttpServletRequest;
+import java.util.Arrays;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,6 +42,11 @@ public class GlobalExceptionHandler {
             MissingServletRequestParameterException.class, MethodArgumentTypeMismatchException.class})
     ResponseEntity<ApiError> badRequest(Exception e, HttpServletRequest req) {
         String msg = e instanceof BadRequestException ? e.getMessage() : "Malformed or invalid request";
+        if (e.getCause() instanceof InvalidFormatException ife && ife.getTargetType() != null
+                && ife.getTargetType().isEnum() && !ife.getPath().isEmpty()) {
+            String field = ife.getPath().get(ife.getPath().size() - 1).getFieldName();
+            msg = field + " must be one of " + Arrays.toString(ife.getTargetType().getEnumConstants());
+        }
         return build(HttpStatus.BAD_REQUEST, msg, req);
     }
 
