@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(HealthController.class)
-@Import(SecurityConfig.class)
+@Import({SecurityConfig.class, JwtService.class})
 class HealthControllerTest {
 
     @Autowired
@@ -25,7 +25,11 @@ class HealthControllerTest {
     }
 
     @Test
-    void otherRoutesRequireAuth() throws Exception {
-        mvc.perform(get("/api/facilities")).andExpect(status().isForbidden());
+    void protectedRoutesReturn401WithErrorBody() throws Exception {
+        mvc.perform(get("/api/facilities"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.status").value(401))
+            .andExpect(jsonPath("$.error").value("Unauthorized"))
+            .andExpect(jsonPath("$.path").value("/api/facilities"));
     }
 }
