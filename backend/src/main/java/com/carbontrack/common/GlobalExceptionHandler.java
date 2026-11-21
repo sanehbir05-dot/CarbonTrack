@@ -19,6 +19,8 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
@@ -48,6 +50,16 @@ public class GlobalExceptionHandler {
             msg = field + " must be one of " + Arrays.toString(ife.getTargetType().getEnumConstants());
         }
         return build(HttpStatus.BAD_REQUEST, msg, req);
+    }
+
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    ResponseEntity<ApiError> missingPart(MissingServletRequestPartException e, HttpServletRequest req) {
+        return build(HttpStatus.BAD_REQUEST, "Missing required part '" + e.getRequestPartName() + "'", req);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    ResponseEntity<ApiError> tooLarge(MaxUploadSizeExceededException e, HttpServletRequest req) {
+        return build(HttpStatus.PAYLOAD_TOO_LARGE, "The uploaded file is too large (limit 2 MB)", req);
     }
 
     @ExceptionHandler({BadCredentialsException.class, AuthenticationCredentialsNotFoundException.class})

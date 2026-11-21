@@ -113,6 +113,28 @@ class ActivityServiceTest {
     }
 
     @Test
+    void importPathStoresSourceCsvAndSkipsFacilityAndBaselineLookups() {
+        when(calculator.calculate(eq(Category.ELECTRICITY), eq(new BigDecimal("1000")), eq(YEAR)))
+                .thenReturn(new CalculationResult(factor, new BigDecimal("710.000")));
+        when(records.saveAndFlush(any(ActivityRecord.class))).thenAnswer(i -> i.getArgument(0));
+
+        ActivityDto dto = service.createForImport(COMPANY, USER, facility, req(Category.ELECTRICITY, "1000", YEAR, 5));
+
+        assertEquals(RecordSource.CSV, dto.source());
+        assertEquals(new BigDecimal("710.000"), dto.co2eKg());
+        assertEquals("Pune Plant", dto.facilityName());
+        verify(facilities, never()).getOwned(any(), any());
+        verify(companies, never()).findById(any());
+    }
+
+    @Test
+    void importPathStillRejectsAFutureYear() {
+        assertThrows(BadRequestException.class, () -> service.createForImport(COMPANY, USER, facility,
+                req(Category.DIESEL, "10", Year.now().getValue() + 1, 1)));
+        verify(records, never()).saveAndFlush(any());
+    }
+
+    @Test
     void createSetsBaselineToEarliestYearWhenNull() {
         stubCreateDependencies(Category.DIESEL, "10", YEAR, "26.800");
         when(records.findMinYear(COMPANY)).thenReturn(YEAR - 2);

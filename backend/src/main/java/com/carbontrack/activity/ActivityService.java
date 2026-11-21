@@ -68,13 +68,35 @@ public class ActivityService {
 
     @Transactional
     public ActivityDto create(Long companyId, Long userId, ActivityRequest req) {
+        return create(companyId, userId, req, RecordSource.MANUAL);
+    }
+
+    /** Same as a manual create, but records where the row came from (for example CSV). */
+    @Transactional
+    public ActivityDto create(Long companyId, Long userId, ActivityRequest req, RecordSource source) {
         ActivityRecord r = new ActivityRecord();
         r.setCompanyId(companyId);
-        r.setSource(RecordSource.MANUAL);
+        r.setSource(source);
         r.setCreatedBy(userId);
         fill(r, companyId, req);
         records.saveAndFlush(r);
         ensureBaselineYear(companyId);
+        return ActivityDto.from(r);
+    }
+
+    /**
+     * Fast path for CSV import. The caller has already taken {@code facility} from the company's own
+     * facility list, so it is not looked up again, and it calls {@link #ensureBaselineYear} once at the end
+     * instead of after every row. Validation and calculation are the same as for a manual record.
+     */
+    @Transactional
+    public ActivityDto createForImport(Long companyId, Long userId, Facility facility, ActivityRequest req) {
+        ActivityRecord r = new ActivityRecord();
+        r.setCompanyId(companyId);
+        r.setSource(RecordSource.CSV);
+        r.setCreatedBy(userId);
+        fillWith(r, facility, req);
+        records.saveAndFlush(r);
         return ActivityDto.from(r);
     }
 
@@ -99,11 +121,19 @@ public class ActivityService {
 
     /** Validates, derives unit and scope from the category, and (re)calculates the emission. */
     private void fill(ActivityRecord r, Long companyId, ActivityRequest req) {
+        validateYear(req.year());   // checked before the facility, so the error order is stable
+        fillWith(r, facilities.getOwned(companyId, req.facilityId()), req);
+    }
+
+    private static void validateYear(int year) {
         int maxYear = Year.now().getValue();
-        if (req.year() < MIN_YEAR || req.year() > maxYear) {
+        if (year < MIN_YEAR || year > maxYear) {
             throw new BadRequestException("year must be between " + MIN_YEAR + " and " + maxYear);
         }
-        Facility facility = facilities.getOwned(companyId, req.facilityId());
+    }
+
+    private void fillWith(ActivityRecord r, Facility facility, ActivityRequest req) {
+        validateYear(req.year());
         CalculationResult calc = calculator.calculate(req.category(), req.quantity(), req.year());
 
         r.setFacility(facility);
@@ -118,7 +148,8 @@ public class ActivityService {
     }
 
     /** If the company has no baseline year yet, use the earliest year that has data. */
-    private void ensureBaselineYear(Long companyId) {
+    @Transactional
+    public void ensureBaselineYear(Long companyId) {
         Company company = companies.findById(companyId)
                 .orElseThrow(() -> new NotFoundException("Company not found"));
         if (company.getBaselineYear() == null) {

@@ -7,12 +7,15 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.carbontrack.activity.dto.ActivityDto;
 import com.carbontrack.activity.dto.ActivityRequest;
+import com.carbontrack.activity.dto.UploadResult;
+import com.carbontrack.common.BadRequestException;
 import com.carbontrack.common.Category;
 import com.carbontrack.common.CurrentUser;
 import com.carbontrack.common.GlobalExceptionHandler;
@@ -22,7 +25,9 @@ import com.carbontrack.common.RecordSource;
 import com.carbontrack.common.Role;
 import com.carbontrack.common.Scope;
 import com.carbontrack.common.SecurityConfig;
+import java.io.InputStream;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -30,6 +35,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -40,6 +46,58 @@ class ActivityControllerTest {
     @Autowired MockMvc mvc;
     @Autowired JwtService jwt;
     @MockitoBean ActivityService service;
+    @MockitoBean CsvImportService csvImport;
+
+    private static MockMultipartFile csv(String content) {
+        return new MockMultipartFile("file", "data.csv", "text/csv", content.getBytes(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void uploadReturnsImportedFailedAndRowErrors() throws Exception {
+        when(csvImport.importCsv(eq(42L), eq(7L), any(InputStream.class))).thenReturn(
+                new UploadResult(2, 1, List.of(new UploadResult.RowError(4, "facility 'X' not found"))));
+
+        mvc.perform(multipart("/api/activities/upload").file(csv("facilityName,category,quantity,year,month\n"))
+                .header("Authorization", bearer(Role.ANALYST)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.imported").value(2))
+            .andExpect(jsonPath("$.failed").value(1))
+            .andExpect(jsonPath("$.errors[0].row").value(4))
+            .andExpect(jsonPath("$.errors[0].message").value("facility 'X' not found"));
+    }
+
+    @Test
+    void uploadOfEmptyFileIs400() throws Exception {
+        mvc.perform(multipart("/api/activities/upload").file(csv(""))
+                .header("Authorization", bearer(Role.ADMIN)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("CSV file is empty"));
+        verify(csvImport, never()).importCsv(any(), any(), any());
+    }
+
+    @Test
+    void uploadWithoutFilePartIs400() throws Exception {
+        mvc.perform(multipart("/api/activities/upload").header("Authorization", bearer(Role.ADMIN)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Missing required part 'file'"));
+    }
+
+    @Test
+    void uploadWithBadHeaderIs400WithServiceMessage() throws Exception {
+        when(csvImport.importCsv(any(), any(), any(InputStream.class)))
+            .thenThrow(new BadRequestException("CSV header must be facilityName,category,quantity,year,month"));
+
+        mvc.perform(multipart("/api/activities/upload").file(csv("a,b\n1,2\n"))
+                .header("Authorization", bearer(Role.ADMIN)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value(
+                    org.hamcrest.Matchers.startsWith("CSV header must be")));
+    }
+
+    @Test
+    void uploadRequiresAuth() throws Exception {
+        mvc.perform(multipart("/api/activities/upload").file(csv("x"))).andExpect(status().isUnauthorized());
+    }
 
     private String bearer(Role role) {
         return "Bearer " + jwt.generate(7L, 42L, role);
