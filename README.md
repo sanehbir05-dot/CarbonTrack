@@ -194,11 +194,16 @@ Base path `/api`. Send `Authorization: Bearer <token>` on every route except reg
 | Auth | `POST /auth/register`, `POST /auth/login`, `GET /auth/me` |
 | Facilities | `GET, POST /facilities`, `PUT, DELETE /facilities/{id}` |
 | Emission factors | `GET /factors` |
-| Activities | `GET, POST /activities`, `PUT, DELETE /activities/{id}` |
+| Activities | `GET, POST /activities`, `PUT, DELETE /activities/{id}`, `POST /activities/upload` (CSV) |
+| Reduction actions | `GET, POST /actions` |
 | Dashboard | `GET /dashboard/years`, `/summary`, `/monthly`, `/by-category`, `/by-facility` |
 | Targets | `GET, POST /targets`, `DELETE /targets/{id}` |
 | Incentives | `GET /incentives/rules`, `GET /incentives/status` |
 | AI | `GET /ai/forecast`, `GET /ai/anomalies`, `POST /ai/assistant` |
+
+**CSV upload.** `POST /activities/upload` takes a multipart `file` with the header `facilityName,category,quantity,year,month` (any column order, up to 2000 rows and 2 MB). Facilities are matched by name within your company. Each row is saved on its own, so one bad row does not block the others. The response is `{ "imported": 3, "failed": 1, "errors": [ { "row": 4, "message": "..." } ] }`, where row 1 is the header. Uploading the same file twice creates the records twice.
+
+**Roles.** ADMIN can do everything. ANALYST can read everything and can create, edit, and upload (CSV) activity records. Deleting activity records, and creating or changing facilities, targets, and reduction actions, is ADMIN only.
 
 Errors return one shape:
 
@@ -234,8 +239,6 @@ Database changes go through new Flyway migrations. Never edit a migration that h
 
 ## Roadmap
 
-- CSV upload of activity records
-- Reduction actions log
 - PDF sustainability report in a BRSR-style layout
 - Simulated IoT meter feed
 - Demo data scaled to a listed company's publicly disclosed BRSR totals
