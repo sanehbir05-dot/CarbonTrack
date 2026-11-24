@@ -1,0 +1,35 @@
+package com.carbontrack.common;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.web.servlet.MockMvc;
+
+@WebMvcTest(HealthController.class)
+@Import({SecurityConfig.class, JwtService.class})
+class HealthControllerTest {
+
+    @Autowired
+    MockMvc mvc;
+
+    @Test
+    void healthIsPublicAndUp() throws Exception {
+        mvc.perform(get("/api/health"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("UP"));
+    }
+
+    @Test
+    void protectedRoutesReturn401WithErrorBody() throws Exception {
+        mvc.perform(get("/api/facilities"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.status").value(401))
+            .andExpect(jsonPath("$.error").value("Unauthorized"))
+            .andExpect(jsonPath("$.path").value("/api/facilities"));
+    }
+}
