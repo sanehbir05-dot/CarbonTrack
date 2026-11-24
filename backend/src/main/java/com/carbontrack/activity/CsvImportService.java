@@ -21,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -40,7 +41,10 @@ import org.springframework.stereotype.Service;
  * {@code source = CSV}. A bad row is reported and skipped. It never blocks the good rows.
  * This class is deliberately not transactional: every row commits or fails by itself.
  *
- * <p>Uploading the same file twice creates the records twice. There is no duplicate detection.
+ * <p>A row is a duplicate when the company already has a record with the same facility, category, year
+ * and month (see {@link RecordKey}), either from earlier or from an earlier row of the same file. Duplicates
+ * are reported as row errors and skipped, so re-uploading a file imports nothing the second time.
+ * Manual entry is not affected: two meters in one month are legitimate there.
  */
 @Service
 public class CsvImportService {
@@ -61,6 +65,7 @@ public class CsvImportService {
     public UploadResult importCsv(Long companyId, Long userId, InputStream in) {
         List<CSVRecord> rows = readRows(in);
         Map<String, List<Facility>> byName = facilitiesByName(companyId);
+        Set<RecordKey> seen = new HashSet<>(activities.existingKeys(companyId));   // loaded once, grows as rows import
 
         int imported = 0;
         List<RowError> errors = new ArrayList<>();
@@ -68,7 +73,19 @@ public class CsvImportService {
             int rowNumber = i + 2; // row 1 is the header
             try {
                 ParsedRow row = parse(rows.get(i), byName);
-                activities.createForImport(companyId, userId, row.facility(), row.request());
+                ActivityRequest req = row.request();
+                RecordKey key = new RecordKey(req.facilityId(), req.category(), req.year(), req.month());
+                if (!seen.add(key)) {
+                    throw new RowException("duplicate: a record for " + row.facility().getName() + ", "
+                            + req.category() + ", " + req.year() + "-" + String.format("%02d", req.month())
+                            + " already exists");
+                }
+                try {
+                    activities.createForImport(companyId, userId, row.facility(), req);
+                } catch (RuntimeException e) {
+                    seen.remove(key);   // the row did not save, so it must not block a later identical row
+                    throw e;
+                }
                 imported++;
             } catch (RowException | BadRequestException | NotFoundException e) {
                 errors.add(new RowError(rowNumber, e.getMessage()));

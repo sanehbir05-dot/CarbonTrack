@@ -1,5 +1,6 @@
 package com.carbontrack.activity;
 
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -19,6 +20,11 @@ public interface ActivityRecordRepository
 
     @EntityGraph(attributePaths = {"facility", "factor"})
     Optional<ActivityRecord> findByIdAndCompanyId(Long id, Long companyId);
+
+    /** Keys of every record the company has. Used once per CSV upload to skip duplicate rows. */
+    @Query("select new com.carbontrack.activity.RecordKey(r.facility.id, r.category, r.year, r.month) "
+            + "from ActivityRecord r where r.companyId = :companyId")
+    List<RecordKey> findAllKeys(Long companyId);
 
     @Query("select min(r.year) from ActivityRecord r where r.companyId = :companyId")
     Integer findMinYear(Long companyId);

@@ -304,11 +304,80 @@ class CsvImportServiceTest {
     void exactlyTheMaximumNumberOfRowsIsAccepted() {
         facilitiesAre(facility(1, "Pune Plant"));
         String rows = IntStream.range(0, CsvImportService.MAX_ROWS)
-                .mapToObj(i -> "Pune Plant,DIESEL,10,2024,1").collect(Collectors.joining("\n"));
+                .mapToObj(i -> "Pune Plant," + Category.values()[i % 9] + ",10," + (2000 + i / 108) + "," + (i / 9 % 12 + 1))
+                .collect(Collectors.joining("\n"));   // every row a different category/period, so none is a duplicate
 
         UploadResult r = run(HEADER + rows + "\n");
 
         assertEquals(CsvImportService.MAX_ROWS, r.imported());
         verify(activities, atLeastOnce()).createForImport(any(), any(), any(), any());
+    }
+
+    // ---------------------------------------------------------------- duplicates
+
+    @Test
+    void rowMatchingAnExistingRecordIsSkippedAsDuplicate() {
+        facilitiesAre(facility(1, "Pune Plant"));
+        when(activities.existingKeys(C)).thenReturn(java.util.Set.of(new RecordKey(1L, Category.ELECTRICITY, 2024, 3)));
+
+        UploadResult r = run(HEADER + "Pune Plant,ELECTRICITY,999,2024,3\nPune Plant,ELECTRICITY,999,2024,4\n");
+
+        assertEquals(1, r.imported());
+        assertEquals(1, r.failed());
+        assertEquals(2, r.errors().get(0).row());
+        assertEquals("duplicate: a record for Pune Plant, ELECTRICITY, 2024-03 already exists", r.errors().get(0).message());
+        assertEquals(4, savedRequests(1).get(0).month());
+    }
+
+    @Test
+    void secondCopyOfARowInTheSameFileIsADuplicateOfTheFirst() {
+        facilitiesAre(facility(1, "Pune Plant"));
+
+        UploadResult r = run(HEADER + "Pune Plant,DIESEL,10,2024,1\npune plant,diesel,20,2024,1\n");
+
+        assertEquals(1, r.imported());
+        assertEquals(1, r.failed());
+        assertEquals(3, r.errors().get(0).row());
+        assertTrue(r.errors().get(0).message().startsWith("duplicate:"));
+    }
+
+    @Test
+    void reuploadingTheSameFileImportsNothing() {
+        facilitiesAre(facility(1, "Pune Plant"));
+        when(activities.existingKeys(C)).thenReturn(java.util.Set.of(
+                new RecordKey(1L, Category.DIESEL, 2024, 1), new RecordKey(1L, Category.DIESEL, 2024, 2)));
+
+        UploadResult r = run(HEADER + "Pune Plant,DIESEL,10,2024,1\nPune Plant,DIESEL,10,2024,2\n");
+
+        assertEquals(0, r.imported());
+        assertEquals(2, r.failed());
+        verify(activities, never()).createForImport(any(), any(), any(), any());
+        verify(activities, never()).ensureBaselineYear(any());
+    }
+
+    @Test
+    void differentFacilityCategoryOrPeriodIsNotADuplicate() {
+        facilitiesAre(facility(1, "Pune Plant"), facility(2, "HQ"));
+        when(activities.existingKeys(C)).thenReturn(java.util.Set.of(new RecordKey(1L, Category.DIESEL, 2024, 1)));
+
+        UploadResult r = run(HEADER + "HQ,DIESEL,1,2024,1\nPune Plant,PETROL,1,2024,1\n"
+                + "Pune Plant,DIESEL,1,2025,1\nPune Plant,DIESEL,1,2024,2\n");
+
+        assertEquals(4, r.imported());
+        assertEquals(0, r.failed());
+    }
+
+    @Test
+    void aRowThatFailedToSaveDoesNotMakeALaterIdenticalRowADuplicate() {
+        facilitiesAre(facility(1, "Pune Plant"));
+        when(activities.createForImport(eq(C), eq(U), any(Facility.class), any(ActivityRequest.class)))
+                .thenThrow(new BadRequestException("no factor"))
+                .thenReturn(null);
+
+        UploadResult r = run(HEADER + "Pune Plant,DIESEL,10,2024,1\nPune Plant,DIESEL,10,2024,1\n");
+
+        assertEquals(1, r.imported());
+        assertEquals(1, r.failed());
+        assertEquals("no factor", r.errors().get(0).message());
     }
 }

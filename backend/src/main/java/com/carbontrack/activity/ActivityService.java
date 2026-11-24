@@ -14,6 +14,8 @@ import com.carbontrack.company.CompanyRepository;
 import com.carbontrack.facility.Facility;
 import com.carbontrack.facility.FacilityService;
 import java.time.Year;
+import java.util.HashSet;
+import java.util.Set;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -145,6 +147,12 @@ public class ActivityService {
         r.setMonth(req.month());
         r.setFactor(calc.factor());
         r.setCo2eKg(calc.co2eKg());
+    }
+
+    /** Keys of the company's existing records, for CSV duplicate detection. */
+    @Transactional(readOnly = true)
+    public Set<RecordKey> existingKeys(Long companyId) {
+        return new HashSet<>(records.findAllKeys(companyId));
     }
 
     /** If the company has no baseline year yet, use the earliest year that has data. */

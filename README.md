@@ -201,7 +201,7 @@ Base path `/api`. Send `Authorization: Bearer <token>` on every route except reg
 | Incentives | `GET /incentives/rules`, `GET /incentives/status` |
 | AI | `GET /ai/forecast`, `GET /ai/anomalies`, `POST /ai/assistant` |
 
-**CSV upload.** `POST /activities/upload` takes a multipart `file` with the header `facilityName,category,quantity,year,month` (any column order, up to 2000 rows and 2 MB). Facilities are matched by name within your company. Each row is saved on its own, so one bad row does not block the others. The response is `{ "imported": 3, "failed": 1, "errors": [ { "row": 4, "message": "..." } ] }`, where row 1 is the header. Uploading the same file twice creates the records twice.
+**CSV upload.** `POST /activities/upload` takes a multipart `file` with the header `facilityName,category,quantity,year,month` (any column order, up to 2000 rows and 2 MB). Facilities are matched by name within your company. Each row is saved on its own, so one bad row does not block the others. The response is `{ "imported": 3, "failed": 1, "errors": [ { "row": 4, "message": "..." } ] }`, where row 1 is the header. A row is skipped as a duplicate (reported in `errors`) when the company already has a record for the same facility, category, year, and month, so uploading the same file twice imports nothing the second time. Manual entry is not checked this way.
 
 **Roles.** ADMIN can do everything. ANALYST can read everything and can create, edit, and upload (CSV) activity records. Deleting activity records, and creating or changing facilities, targets, and reduction actions, is ADMIN only.
 
