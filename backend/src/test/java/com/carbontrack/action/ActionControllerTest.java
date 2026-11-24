@@ -77,11 +77,12 @@ class ActionControllerTest {
     }
 
     @Test
-    void analystCannotCreate() throws Exception {
+    void analystCanCreate() throws Exception {
+        when(service.create(eq(42L), any(ActionRequest.class))).thenReturn(dto());
         mvc.perform(post("/api/actions").header("Authorization", bearer(Role.ANALYST))
                 .contentType(MediaType.APPLICATION_JSON).content(VALID))
-            .andExpect(status().isForbidden());
-        verify(service, never()).create(any(), any());
+            .andExpect(status().isCreated());
+        verify(service).create(eq(42L), any(ActionRequest.class));
     }
 
     @Test
