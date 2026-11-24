@@ -7,6 +7,9 @@ Carbon emission tracking platform for Indian companies. React frontend, Spring B
 
 Team: Saneh (frontend), Guransh (backend), Manit (deployment, CI/CD, seed data, AI endpoints).
 
+## Session notes
+Per-session notes live in `claude/` (index: `claude/README.md`). Read the latest file there at the start of a session, and add a new `claude/session-YYYY-MM-DD-<topic>.md` when a session ends. Never put secrets in them.
+
 ## Branches
 - `main`: deployable; pushing to it triggers `deploy.yml`.
 - `develop`: integration branch (README + docs only so far; no backend or frontend code yet).
@@ -45,7 +48,8 @@ Team: Saneh (frontend), Guransh (backend), Manit (deployment, CI/CD, seed data, 
 - [x] Hello-world: temporary Nginx on port 80 reachable from the internet at http://15.252.44.221 (test container removed afterwards; security group ports 80/443 verified)
 - [ ] Domain registered in Route 53, A record set
 - [ ] HTTPS (certbot, 443 block in nginx.conf), smoke step updated
-- [ ] PR `ops/aws-deployment` into `develop`
+- [x] Session notes folder `claude/` created, READMEs updated
+- [x] PR `ops/aws-deployment` into `develop` opened (see GitHub; do not merge without the user's go-ahead)
 - [ ] Real backend and frontend merged and deployed
 
 ## Values to fill in as we learn them (no secrets here)

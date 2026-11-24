@@ -2,43 +2,58 @@
 
 Target: one EC2 instance (Ubuntu 24.04, t3.small), Docker Compose (`db`, `backend`, `web`), images from GHCR, deployed by GitHub Actions on push to `main`. Estimated cost is about $22-25/month.
 
+**Status (see `CLAUDE.md` and `claude/` for details):** steps 1 to 3 are done and the server answers on port 80 from the internet. GitHub secrets, the domain, HTTPS and the real app are still to do.
+
 ## 1. AWS account
 - Turn on MFA for root and use an IAM admin user.
 - Create a Budget (about $25/month) with email alerts.
-- Use one region, for example `ap-south-1`.
+- Use one region. This project uses `ap-south-1` (Mumbai).
 
 ## 2. EC2 host
-1. Launch Ubuntu 24.04, t3.small, 20-30 GB gp3.
-2. Security group: 22 from your IP only, 80 and 443 from anywhere. Never open 5432 or 8080.
-3. Allocate an Elastic IP and attach it.
-4. Install Docker and add swap:
+1. Create an IAM role `carbontrack-ec2-ssm` (trusted entity EC2, policy `AmazonSSMManagedInstanceCore`). It lets you open a browser terminal through Session Manager.
+2. Launch Ubuntu 24.04, t3.small, 25 GB gp3. Attach the role under Advanced details, and proceed without a key pair.
+3. Security group: 80 and 443 from anywhere. Never open 5432 or 8080. Add 22 from **My IP** only after step 5 below.
+4. Allocate an Elastic IP and attach it.
+5. Connect with **Connect > Session Manager** (you are `ssm-user`). To also use SSH, create a key on your own machine and install its public key:
+   ```bash
+   ssh-keygen -t ed25519 -f ~/.ssh/carbontrack_ed25519 -C carbontrack-ec2
+   ```
+   Then run this once in Session Manager, with your public key pasted in:
+   ```bash
+   sudo mkdir -p /home/ubuntu/.ssh && echo '<PUBLIC_KEY>' | sudo tee -a /home/ubuntu/.ssh/authorized_keys >/dev/null && sudo chown -R ubuntu:ubuntu /home/ubuntu/.ssh && sudo chmod 700 /home/ubuntu/.ssh && sudo chmod 600 /home/ubuntu/.ssh/authorized_keys
+   ```
+   Connect with `ssh -i ~/.ssh/carbontrack_ed25519 ubuntu@<elastic-ip>`. If SSH times out, your IP changed: update the port 22 rule.
+6. Install Docker and add swap. **In Session Manager, paste one command per line.** Multi-line pastes get joined and break commands. Over SSH this does not matter.
    ```bash
    curl -fsSL https://get.docker.com | sudo sh
    sudo usermod -aG docker ubuntu
-   sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
-   sudo mkswap /swapfile && sudo swapon /swapfile
+   sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
    echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
    ```
-5. Set up the app folder:
+7. Set up the app folder and files:
    ```bash
    sudo mkdir -p /opt/carbontrack && sudo chown ubuntu /opt/carbontrack
-   scp deploy/docker-compose.prod.yml ubuntu@<ip>:/opt/carbontrack/
-   scp deploy/.env.example ubuntu@<ip>:/opt/carbontrack/.env   # then edit and chmod 600
+   scp -i ~/.ssh/carbontrack_ed25519 deploy/docker-compose.prod.yml ubuntu@<elastic-ip>:/opt/carbontrack/
    ```
-6. Make the two GHCR packages public, or run `docker login ghcr.io` with a read-only token.
+   Create the real `.env` on the server with generated secrets (it never leaves the server):
+   ```bash
+   printf 'GHCR_OWNER=<github-owner-lowercase>\nDB_USERNAME=carbontrack\nDB_PASSWORD=%s\nJWT_SECRET=%s\nJWT_EXPIRY_MINUTES=1440\nAPP_SEED_ENABLED=true\nJAVA_TOOL_OPTIONS=-Xmx512m\nLLM_BASE_URL=\nLLM_API_KEY=\nLLM_MODEL=\n' "$(openssl rand -hex 16)" "$(openssl rand -hex 48)" > /opt/carbontrack/.env && chmod 600 /opt/carbontrack/.env
+   ```
+   Check it (prints names only): `cd /opt/carbontrack && cut -d= -f1 .env && docker compose -f docker-compose.prod.yml config --quiet && echo OK`
+8. Check the server is reachable: run `docker run -d --rm --name hello-web -p 80:80 nginx:1.27-alpine`, open `http://<elastic-ip>`, then `docker stop hello-web`.
+9. Make the two GHCR packages public, or run `docker login ghcr.io` with a read-only token.
 
 ## 3. GitHub secrets
-`EC2_HOST` (the domain or IP), `EC2_USER`, `EC2_SSH_KEY` (a dedicated deploy key).
+`EC2_HOST` (the domain or IP), `EC2_USER` (`ubuntu`), `EC2_SSH_KEY` (a separate deploy-only key, not your personal one).
 
-## 4. Domain and HTTPS
+## 4. Domain and HTTPS (not done yet, command untested)
 1. Register the domain in Route 53 and add an A record to the Elastic IP.
-2. Issue a certificate (after the site works over HTTP):
+2. With the stack running, issue a certificate:
    ```bash
-   docker compose -f docker-compose.prod.yml run --rm --entrypoint certbot \
-     -v carbontrack_certbot-www:/var/www/certbot -v carbontrack_certbot-certs:/etc/letsencrypt \
-     certbot/certbot certonly --webroot -w /var/www/certbot -d <domain>
+   docker run --rm -v carbontrack_certbot-www:/var/www/certbot -v carbontrack_certbot-certs:/etc/letsencrypt certbot/certbot certonly --webroot -w /var/www/certbot -d <domain>
    ```
    Then add a 443 server block to `nginx.conf` using `/etc/letsencrypt/live/<domain>/` and redirect port 80 to HTTPS. Renew with a weekly cron job running `certbot renew` and `docker compose exec web nginx -s reload`.
+3. Change the smoke test step in `deploy.yml` if `EC2_HOST` is not the domain (it calls `https://$EC2_HOST`). Until HTTPS works, run `bash deploy/smoke.sh http://<elastic-ip>` by hand.
 
 ## 5. Operations
 - Never run `docker compose down -v` on the server (it deletes the database).
