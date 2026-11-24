@@ -1,0 +1,50 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: carbontrack
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d carbontrack"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    image: ghcr.io/${GHCR_OWNER}/carbontrack-backend:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/carbontrack
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRY_MINUTES: ${JWT_EXPIRY_MINUTES:-1440}
+      APP_SEED_ENABLED: ${APP_SEED_ENABLED:-true}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--Xmx512m}
+
+  web:
+    image: ghcr.io/${GHCR_OWNER}/carbontrack-web:latest
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - certbot-www:/var/www/certbot
+      - certbot-certs:/etc/letsencrypt
+
+volumes:
+  pgdata:
+  certbot-www:
+  certbot-certs:

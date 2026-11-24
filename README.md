@@ -82,7 +82,9 @@ carbontrack/
 ├─ frontend/
 │  ├─ src/              api, auth, components, pages, utils, mocks
 │  └─ Dockerfile
-├─ deploy/              nginx.conf, docker-compose.prod.yml, .env.example, smoke.sh
+├─ deploy/              nginx.conf, docker-compose.prod.yml, .env.example, smoke.sh, README.md
+├─ claude/              session notes and decisions from Claude Code sessions
+├─ CLAUDE.md            standing instructions and progress checklist for Claude Code
 ├─ docker-compose.yml   local Postgres
 ├─ .github/workflows/   ci.yml, deploy.yml
 └─ docs/                team briefs and the shared API contract
@@ -223,7 +225,9 @@ Unit tests cover factor selection, target status, and incentive tier logic.
 
 ## Deployment
 
-The app runs on one AWS EC2 instance as a Docker Compose stack with three services: `db`, `backend`, and `web` (Nginx with the React build). Only port 80 is public.
+The app runs on one AWS EC2 instance (Mumbai, `ap-south-1`) as a Docker Compose stack with three services: `db`, `backend`, and `web` (Nginx with the React build). Only `web` is public, on ports 80 and 443. Postgres and the backend are reachable only inside the Docker network.
+
+The full server setup, HTTPS steps and operations notes are in [deploy/README.md](deploy/README.md). Session notes and decisions are in [claude/](claude/).
 
 **CI/CD with GitHub Actions**
 - `ci.yml` runs on every pull request: backend `mvn verify` and frontend build.

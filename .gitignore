@@ -16,5 +16,6 @@ backend/build/
 .claude/
 .env
 .env.*
+!deploy/.env.example
 *.log
 .DS_Store
