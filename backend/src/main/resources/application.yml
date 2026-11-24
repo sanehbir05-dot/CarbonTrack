@@ -26,6 +26,7 @@ app:
   jwt:
     secret: ${JWT_SECRET:local-dev-only-secret-change-me-local-dev-only-secret-change-me-0123456789}
     expiry-minutes: ${JWT_EXPIRY_MINUTES:1440}
+    allow-dev-secret: ${JWT_ALLOW_DEV_SECRET:false}   # local development only; see JwtSecretGuard
   seed:
     enabled: ${APP_SEED_ENABLED:false}
   cors:

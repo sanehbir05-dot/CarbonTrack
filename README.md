@@ -106,9 +106,9 @@ carbontrack/
 3. **Start the backend**
    ```bash
    cd backend
-   ./mvnw spring-boot:run
+   JWT_ALLOW_DEV_SECRET=true ./mvnw spring-boot:run
    ```
-   Flyway creates the schema and reference data. The seeder creates the demo company on the first run. The API is at `http://localhost:8080/api` and Swagger UI is at `http://localhost:8080/swagger-ui.html`.
+   The backend refuses to start with the built-in development JWT secret unless you either set `JWT_SECRET` or, for local use only, set `JWT_ALLOW_DEV_SECRET=true` as above. Flyway creates the schema and reference data. The seeder creates the demo company on the first run. The API is at `http://localhost:8080/api` and Swagger UI is at `http://localhost:8080/swagger-ui.html`.
 
 4. **Start the frontend**
    ```bash
@@ -130,7 +130,8 @@ The backend has local defaults that match the root `docker-compose.yml`, so noth
 |---|---|---|
 | `DB_URL` | backend | JDBC URL, for example `jdbc:postgresql://db:5432/carbontrack` |
 | `DB_USERNAME`, `DB_PASSWORD` | backend, db | Database login |
-| `JWT_SECRET` | backend | Signing key, 64 or more random characters |
+| `JWT_SECRET` | backend | Signing key, 64 or more random characters. Required outside local development |
+| `JWT_ALLOW_DEV_SECRET` | backend | Local development only. `true` allows the built-in development secret when `JWT_SECRET` is not set. Never set it on a server |
 | `JWT_EXPIRY_MINUTES` | backend | Token lifetime, for example `1440` |
 | `APP_SEED_ENABLED` | backend | `true` creates the demo company on startup |
 | `CORS_ALLOWED_ORIGINS` | backend | Local development only, for example `http://localhost:5173` |
