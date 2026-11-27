@@ -290,11 +290,12 @@ export default function Dashboard() {
             <h3>Facility comparison</h3>
             <span className="link">tCO₂e · {summary.year}</span>
           </div>
+          <div className="table-wrap">
           <table className="tbl">
             <thead>
               <tr>
                 <th>Facility</th>
-                <th style={{ width: '40%' }}>Emissions</th>
+                <th className="hide-sm" style={{ width: '40%' }}>Emissions</th>
                 <th className="r">tCO₂e</th>
                 <th className="r">Share</th>
               </tr>
@@ -305,7 +306,7 @@ export default function Dashboard() {
                   <td>
                     <b style={{ fontWeight: 500 }}>{f.facilityName}</b>
                   </td>
-                  <td>
+                  <td className="hide-sm">
                     <div className="bar-track">
                       <div className="bar-fill" style={{ width: `${(f.co2eKg / maxFacilityKg) * 100}%` }} />
                     </div>
@@ -318,6 +319,7 @@ export default function Dashboard() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
     </div>
